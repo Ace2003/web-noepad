@@ -717,6 +717,30 @@
         </div>
     </div>
 
+    <!-- 另存为对话框 -->
+    <div class="dialog-overlay" id="save-as-dialog">
+        <div class="dialog">
+            <div class="dialog-title">另存为</div>
+            <div class="dialog-content">
+                <div class="dialog-label">文件名:</div>
+                <input type="text" class="dialog-input" id="save-as-filename" placeholder="输入文件名">
+                <div class="dialog-label" style="margin-top: 15px;">保存类型:</div>
+                <select class="dialog-select" id="save-as-type">
+                    <option value=".txt">文本文档 (*.txt)</option>
+                    <option value=".html">HTML 文档 (*.html)</option>
+                    <option value=".js">JavaScript (*.js)</option>
+                    <option value=".css">样式表 (*.css)</option>
+                    <option value=".json">JSON (*.json)</option>
+                    <option value=".md">Markdown (*.md)</option>
+                </select>
+            </div>
+            <div class="dialog-buttons">
+                <button class="dialog-btn" id="save-as-cancel">取消</button>
+                <button class="dialog-btn primary" id="save-as-ok">保存</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 笔记列表面板 -->
     <div class="notes-panel" id="notes-panel">
         <div class="notes-header">
@@ -847,6 +871,15 @@
                 });
                 document.getElementById('goto-line').addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') this.goToLine();
+                });
+                
+                // 另存为对话框
+                document.getElementById('save-as-ok').addEventListener('click', () => this.doSaveAs());
+                document.getElementById('save-as-cancel').addEventListener('click', () => {
+                    document.getElementById('save-as-dialog').classList.remove('show');
+                });
+                document.getElementById('save-as-filename').addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') this.doSaveAs();
                 });
                 
                 // 笔记面板
@@ -1170,18 +1203,78 @@
             }
             
             saveAs() {
+                let defaultName = 'untitled';
+                if (this.currentNoteId) {
+                    const note = this.notes.find(n => n.id === this.currentNoteId);
+                    if (note) {
+                        defaultName = note.title.replace(/\.[^/.]+$/, '');
+                    }
+                } else if (this.editor.value.trim()) {
+                    const firstLine = this.editor.value.split('\n')[0].substring(0, 50).trim();
+                    if (firstLine) {
+                        defaultName = firstLine.replace(/[<>:"/\\|?*]/g, '').substring(0, 30);
+                    }
+                }
+                
+                document.getElementById('save-as-filename').value = defaultName;
+                document.getElementById('save-as-dialog').classList.add('show');
+                document.getElementById('save-as-filename').focus();
+                document.getElementById('save-as-filename').select();
+            }
+            
+            doSaveAs() {
+                const filename = document.getElementById('save-as-filename').value.trim();
+                if (!filename) {
+                    alert('请输入文件名');
+                    document.getElementById('save-as-filename').focus();
+                    return;
+                }
+                
+                const extension = document.getElementById('save-as-type').value;
+                let fullFilename = filename;
+                if (!filename.toLowerCase().endsWith(extension)) {
+                    fullFilename = filename + extension;
+                }
+                
+                fullFilename = fullFilename.replace(/[<>:"/\\|?*]/g, '');
+                
                 const content = this.editor.value;
-                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                let mimeType = 'text/plain;charset=utf-8';
+                switch(extension) {
+                    case '.html':
+                        mimeType = 'text/html;charset=utf-8';
+                        break;
+                    case '.js':
+                        mimeType = 'application/javascript;charset=utf-8';
+                        break;
+                    case '.css':
+                        mimeType = 'text/css;charset=utf-8';
+                        break;
+                    case '.json':
+                        mimeType = 'application/json;charset=utf-8';
+                        break;
+                    case '.md':
+                        mimeType = 'text/markdown;charset=utf-8';
+                        break;
+                }
+                
+                const blob = new Blob([content], { type: mimeType });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = this.currentNoteId ? 
-                    this.notes.find(n => n.id === this.currentNoteId)?.title || 'untitled.txt' : 
-                    'untitled.txt';
+                a.download = fullFilename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
+                
+                document.getElementById('save-as-dialog').classList.remove('show');
+                
+                if (!this.currentNoteId) {
+                    this.saveToLocalStorage();
+                } else {
+                    this.updateNote(this.currentNoteId, this.editor.value);
+                }
             }
             
             saveToLocalStorage() {
